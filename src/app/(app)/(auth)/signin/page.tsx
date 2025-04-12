@@ -2,34 +2,33 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Newspaper, Loader2 } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Facebook, Mail } from "lucide-react"
+import { FcGoogle } from "react-icons/fc"
+import { SignInFormValues, signInSchema } from "@/lib/validations"
 
-// Define the form schema with Zod
-const loginSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
-  password: z.string().min(1, { message: "Password is required" }),
-  remember: z.boolean().optional(),
-})
 
-type LoginFormValues = z.infer<typeof loginSchema>
 
-export default function LoginPage() {
+export default function SigninPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
   const [isLoading, setIsLoading] = useState(false)
+  const [socialLoading, setSocialLoading] = useState<string | null>(null)
 
   // Initialize react-hook-form
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<SignInFormValues>({
+    resolver: zodResolver(signInSchema),
     defaultValues: {
       email: "",
       password: "",
@@ -37,50 +36,86 @@ export default function LoginPage() {
     },
   })
 
-  async function onSubmit(data: LoginFormValues) {
+  async function onSubmit(data: SignInFormValues) {
     setIsLoading(true)
-
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-          remember: data.remember,
-        }),
+      const result = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+        callbackUrl,
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || "Invalid credentials")
+      if (result?.error) {
+        toast.error(result.error || "Failed to sign in")
+        return
       }
 
-      toast.success("Logged in successfully!")
-      router.push("/dashboard")
+      toast.success("Signed in successfully!")
+      router.push(callbackUrl)
+      router.refresh()
     } catch (error) {
-      console.error("Login error:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to log in")
+      console.error("Sign in error:", error)
+      toast.error("Failed to sign in. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleSocialLogin = async (provider: string) => {
+    try {
+      setSocialLoading(provider)
+      await signIn(provider, { callbackUrl })
+    } catch (error) {
+      console.error(`${provider} login error:`, error)
+      toast.error(`An error occurred with ${provider} login. Please try again.`)
+      setSocialLoading(null)
+    }
+  }
+
+
+
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
-      <Link href="/" className="absolute left-4 top-4 md:left-8 md:top-8 flex items-center gap-2">
-        <Newspaper className="h-6 w-6 text-green-600" />
-        <span className="text-lg font-bold">NewsHub</span>
-      </Link>
-      <Card className="w-full max-w-md">
+    <div className="container max-w-md">
+      <Card>
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold tracking-tight">Log in to your account</CardTitle>
-          <CardDescription>Enter your email and password to log in</CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">Sign in to your account</CardTitle>
+          <CardDescription>Enter your email and password to sign in</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="grid gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleSocialLogin("google")}
+            disabled={!!socialLoading}
+            className="w-full"
+          >
+            <FcGoogle className="mr-2 h-4 w-4" />
+            Google
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleSocialLogin("facebook")}
+            disabled={!!socialLoading}
+            className="w-full"
+          >
+            <Facebook className="mr-2 h-4 w-4" />
+            Facebook
+          </Button>
+          </div>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-card px-2 text-sm text-muted-foreground">or continue with</span>
+            </div>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -103,7 +138,7 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center justify-between">
                       <FormLabel>Password</FormLabel>
-                      <Link href="/forgot-password" className="text-sm text-green-600 hover:underline">
+                      <Link href="/auth/forgot-password" className="text-sm text-green-600 hover:underline">
                         Forgot password?
                       </Link>
                     </div>
@@ -135,7 +170,10 @@ export default function LoginPage() {
                     Please wait
                   </>
                 ) : (
-                  "Log In"
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Sign in with Email
+                  </>
                 )}
               </Button>
             </form>
@@ -144,7 +182,7 @@ export default function LoginPage() {
         <CardFooter className="flex justify-center">
           <div className="text-sm text-center">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-green-600 hover:underline">
+            <Link href="/auth/signup" className="text-green-600 hover:underline">
               Sign up
             </Link>
           </div>
@@ -153,4 +191,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

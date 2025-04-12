@@ -2,39 +2,33 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Newspaper, Loader2 } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Facebook, UserPlus } from "lucide-react"
+import { FcGoogle } from "react-icons/fc"
+import { createUser } from "@/lib/actions"
+import { SignUpFormValues, signUpSchema } from "@/lib/validations"
 
-// Define the form schema with Zod
-const signupSchema = z
-  .object({
-    name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-    email: z.string().email({ message: "Please enter a valid email address" }),
-    password: z.string().min(8, { message: "Password must be at least 8 characters" }),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
 
-type SignupFormValues = z.infer<typeof signupSchema>
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
   const [isLoading, setIsLoading] = useState(false)
+  const [socialLoading, setSocialLoading] = useState<string | null>(null)
 
   // Initialize react-hook-form
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<SignUpFormValues>({
+    resolver: zodResolver(signUpSchema),
     defaultValues: {
       name: "",
       email: "",
@@ -43,50 +37,78 @@ export default function SignupPage() {
     },
   })
 
-  async function onSubmit(data: SignupFormValues) {
+  async function onSubmit(data: SignUpFormValues) {
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          password: data.password,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || "Something went wrong")
+      const result = await createUser(data)
+      if (result.error) {
+        const errorMessage = Object.values(result.error).flat()[0] || "Failed to create account"
+        toast.error(errorMessage)
+        return
       }
-
-      toast.success("Account created successfully!")
-      router.push("/dashboard")
+      toast.success("Account created! Please check your email to verify your account.")
+      router.push("/auth/signin")
     } catch (error) {
       console.error("Signup error:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create account")
+      toast.error("Failed to create account. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleSocialLogin = async (provider: string) => {
+    try {
+      setSocialLoading(provider)
+      await signIn(provider, { callbackUrl })
+    } catch (error) {
+      console.error(`${provider} login error:`, error)
+      toast.error(`An error occurred with ${provider} login. Please try again.`)
+      setSocialLoading(null)
+    }
+  }
+
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
-      <Link href="/" className="absolute left-4 top-4 md:left-8 md:top-8 flex items-center gap-2">
-        <Newspaper className="h-6 w-6 text-green-600" />
-        <span className="text-lg font-bold">NewsHub</span>
-      </Link>
-      <Card className="w-full max-w-md">
+    <div className="container max-w-md">
+      <Card>
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight">Create an account</CardTitle>
           <CardDescription>Enter your information to create an account</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="grid gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleSocialLogin("google")}
+              disabled={!!socialLoading}
+              className="w-full"
+            >
+              <FcGoogle className="mr-2 h-4 w-4" />
+              Google
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleSocialLogin("facebook")}
+              disabled={!!socialLoading}
+              className="w-full"
+            >
+              <Facebook className="mr-2 h-4 w-4" />
+              Facebook
+            </Button>
+          </div>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-card px-2 text-sm text-muted-foreground">or continue with</span>
+            </div>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -148,7 +170,10 @@ export default function SignupPage() {
                     Please wait
                   </>
                 ) : (
-                  "Sign Up"
+                  <>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Create Account
+                  </>
                 )}
               </Button>
             </form>
@@ -168,8 +193,8 @@ export default function SignupPage() {
           </div>
           <div className="text-sm text-center">
             Already have an account?{" "}
-            <Link href="/login" className="text-green-600 hover:underline">
-              Log in
+            <Link href="/auth/signin" className="text-green-600 hover:underline">
+              Sign in
             </Link>
           </div>
         </CardFooter>
@@ -177,4 +202,3 @@ export default function SignupPage() {
     </div>
   )
 }
-

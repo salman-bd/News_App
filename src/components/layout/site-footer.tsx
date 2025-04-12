@@ -97,10 +97,11 @@ export function SiteFooter() {
                 "TimesMachine",
                 "NYT Store",
                 "Manage Account",
+                "Admin",
               ].map((item) => (
                 <li key={item}>
                   <Link
-                    href={`/${item.toLowerCase().replace(/['\s]/g, "-")}`}
+                    href={item === "Admin" ? "/admin/dashboard" : `/${item.toLowerCase().replace(/['\s]/g, "-")}`}
                     className="text-gray-400 hover:text-white"
                   >
                     {item}
@@ -159,4 +160,3 @@ export function SiteFooter() {
     </footer>
   )
 }
-

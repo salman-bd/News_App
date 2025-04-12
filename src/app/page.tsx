@@ -9,8 +9,8 @@ import { WeatherWidget } from "@/components/weather-widget"
 import { NewsletterSignup } from "@/components/newsletter-signup"
 import { MostReadSection } from "@/components/most-read-section"
 import { OpinionSection } from "@/components/opinion-section"
-import { SiteHeader } from "@/components/site-header"
-import { SiteFooter } from "@/components/site-footer"
+import { SiteHeader } from "@/components/layout/site-header"
+import { SiteFooter } from "@/components/layout/site-footer"
 
 export default function Home() {
   // Get current date in format like "MONDAY, MARCH 26, 2025"
